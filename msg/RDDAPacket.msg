@@ -1,0 +1,17 @@
+std_msgs/Header header
+float64[] pos
+float64[] vel
+float64[] tau
+float64[] wave
+float64[] wave_aux
+float64[] pressure
+int32[] contact_flag
+float64[] test
+int16 error_signal
+float64 local_stamp
+float64 remote_stamp
+float64 time_delay
+float64[] delay_energy_reservior
+float64[] pos_d
+float64[] energy
+float64[] ct
