@@ -45,7 +45,7 @@ class RDDNode : public rclcpp::Node {
  private:
    //  rclcpp::Node node_;
 
-    rclcpp::Subscription<rdda_interface::msg::RDDAPacket>::SharedPtr rdda_packet_sub;
+   //  rclcpp::Subscription<rdda_interface::msg::RDDAPacket>::SharedPtr rdda_packet_sub;
 
     rclcpp::Publisher<rdda_interface::msg::RDDAPacket>::SharedPtr rdda_packet_pub;
     rclcpp::Publisher<rdda_interface::msg::RDDAPacket>::SharedPtr rdda_packet_aux_pub;
@@ -65,16 +65,16 @@ class RDDNode : public rclcpp::Node {
     void publish_rddapacket_aux();
     void publish_rdda_joint_state();
     void homing_finger();
-    void rddapacket_callback(const rdda_interface::msg::RDDAPacket::SharedPtr msg);
+   //  void rddapacket_callback(const rdda_interface::msg::RDDAPacket::SharedPtr msg);
    //  void rddapacket_callback(const rdda_interface::msg::RDDAPacket::ConstPtr &msg);
 
-    void subJointCommands_callback(const trajectory_msgs::msg::JointTrajectoryPoint::SharedPtr msg);
+   //  void subJointCommands_callback(const trajectory_msgs::msg::JointTrajectoryPoint::SharedPtr msg);
    //  void subJointCommands_callback(const trajectory_msgs::msg::JointTrajectoryPoint::ConstPtr &msg);
 
    //  bool setMaxVel(rdda_interface::SetMaxVelocity::Request &req, rdda_interface::SetMaxVelocity::Response &res);
    //  bool setMaxEffort(rdda_interface::SetMaxEffort::Request &req, rdda_interface::SetMaxEffort::Response &res);
    //  bool setStiffness(rdda_interface::SetStiffness::Request &req, rdda_interface::SetStiffness::Response &res);
-    bool initSlave(std_srvs::srv::Empty::Request &req, std_srvs::srv::Empty::Response &res);
+   //  bool initSlave(std_srvs::srv::Empty::Request &req, std_srvs::srv::Empty::Response &res);
    //  bool initSlave(std_srvs::srv::Empty::Request &req, std_srvs::srv::Empty::Response &res);
 
     bool teleop_connection_index;

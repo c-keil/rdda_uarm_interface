@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <pthread.h>
 
-#define MOTOR_COUNT 3
+#define MOTOR_COUNT 6
 
 /** AEV drive CSP Mode inputs to master */
 typedef struct {
@@ -13,7 +13,7 @@ typedef struct {
     double act_tau;
     // double load_pos;
     // double load_vel;
-    double act_pre;
+    // double act_pre;
 } MotorIn;
 
 /** AEV drive CSP Mode outputs from master */
@@ -49,28 +49,53 @@ typedef struct {
     double coupling_torque_out;
 } RDDAPacket;
 
-/** AEV slave class */
+
+/* Reference signals from ROS interface */
 typedef struct {
-    MotorIn motorIn;
-    MotorOut motorOut;
-    RDDAPacket rddaPacket;
-    /* Constant */
-    double init_pos;
-    /* Parameter */
+    double pos_ref;
     double vel_sat;
     double tau_sat;
     double stiffness;
+} RosOut;
+
+// /** AEV slave class */
+// typedef struct {
+//     MotorIn motorIn;
+//     MotorOut motorOut;
+//     RDDAPacket rddaPacket;
+//     /* Constant */
+//     double init_pos;
+//     /* Parameter */
+//     double vel_sat;
+//     double tau_sat;
+//     double stiffness;
+//     /* SDO */
+//     int Pp;
+//     int Vp;
+// } AEV_slave;
+
+/** BEL slave class */
+typedef struct {
+    MotorIn motorIn;
+    MotorOut motorOut;
+    RosOut rosOut;
+    /* Constant */
+    double tau_max;
+    double init_pos;
     /* SDO */
     int Pp;
     int Vp;
-} AEV_slave;
+    /*for enable*/
+    double last_enabled_position;
+    double position_enable_offset;
+} BEL_slave;
 
 /** Timestamp */
 typedef struct {
     int64_t sec;
     int64_t nsec;
-    double remote_stamp;
-    int delay_cycle;
+    // double remote_stamp;
+    // int delay_cycle;
 } Timestamp;
 
 /** Error signal*/
@@ -79,13 +104,22 @@ typedef struct {
     int error_out;
 } Error_signal;
 
+// /** EtherCAT slave class */
+// typedef struct {
+//     BEL_slave motor[MOTOR_COUNT];
+//     double freq_anti_alias;
+//     Timestamp ts;
+//     pthread_mutex_t mutex;
+//     Error_signal error_signal;
+// } Rdda;
+
 /** EtherCAT slave class */
 typedef struct {
-    AEV_slave motor[MOTOR_COUNT];
+    BEL_slave motor[MOTOR_COUNT];
     double freq_anti_alias;
     Timestamp ts;
     pthread_mutex_t mutex;
-    Error_signal error_signal;
+    unsigned int hardware_enabled;
 } Rdda;
 
 #endif //RDDA_SHM_DATA_H

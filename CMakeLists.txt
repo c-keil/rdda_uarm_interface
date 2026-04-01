@@ -84,6 +84,10 @@ target_link_libraries(${PROJECT_NAME}_node
 install(TARGETS test_node ${PROJECT_NAME}_node
   DESTINATION lib/${PROJECT_NAME})
 
+install(TARGETS ${PROJECT_NAME}_src
+  LIBRARY DESTINATION lib
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights

@@ -9,14 +9,16 @@ RDDNode::RDDNode(Rdda *rddaptr, std::string node_name) : Node(node_name){
 
     // rdda_packet_sub = 
 
-    rdda_packet_sub = this->create_subscription<rdda_interface::msg::RDDAPacket>(
-        "/rdda_right_master_output", 
-        1, 
-        std::bind(&RDDNode::rddapacket_callback, this, std::placeholders::_1));
+    // rdda_packet_sub = this->create_subscription<rdda_interface::msg::RDDAPacket>(
+    //     "/rdda_right_master_output", 
+    //     1, 
+    //     std::bind(&RDDNode::rddapacket_callback, this, std::placeholders::_1));
+
     rdda_packet_pub = this->create_publisher<rdda_interface::msg::RDDAPacket>(
-        "/rdda_right_master_input", 1);
+        "/rdda_packet", 1);
+
     rdda_joint_state_pub = this->create_publisher<sensor_msgs::msg::JointState>(
-        "/right_gripper_joint_states", 1);
+        "/rdda_joint_states", 1);
 
     // if (node_type == "right_gripper") {
     //     rdda_packet_sub = node_.subscribe("/rdda_right_master_output", 1, &RDDNode::rddapacket_callback, this);
@@ -81,93 +83,100 @@ void RDDNode::initConfigParams() {
     // ROS_INFO("Node config initialized");
     teleop_connection_index = false;
 
-    if (node_type == "right_glove" || "right_gripper") joint_names = {"right_index_flex_motor_joint", "right_thumb_flex_motor_joint", "right_thumb_swivel_motor_joint"};
-    else if (node_type == "left_glove" || "left_gripper") joint_names = {"left_index_flex_motor_joint", "left_thumb_flex_motor_joint", "left_thumb_swivel_motor_joint"};
+    // if (node_type == "right_glove" || "right_gripper") joint_names = {"right_index_flex_motor_joint", "right_thumb_flex_motor_joint", "right_thumb_swivel_motor_joint"};
+    // else if (node_type == "left_glove" || "left_gripper") joint_names = {"left_index_flex_motor_joint", "left_thumb_flex_motor_joint", "left_thumb_swivel_motor_joint"};
 
-    // Homing slave gripper
-    if (node_type == "right_gripper" || node_type == "left_gripper") {
-        // homing_finger();
-        // ROS_INFO("Slave gripper homed");
-    }
+    joint_names = {"input_z-axis", 
+                "input_shoulder",
+                "inout_elbow",
+                "output_z-axis",
+                "output_shoulder",
+                "output_elbow"};
 
-    if (node_type == "remote") {
-        // homing_finger();
-        // ROS_INFO("Remote gripper homed");
-    }
-    rdda->ts.remote_stamp = double(this->now().seconds());
+    // // Homing slave gripper
+    // if (node_type == "right_gripper" || node_type == "left_gripper") {
+    //     // homing_finger();
+    //     // ROS_INFO("Slave gripper homed");
+    // }
+
+    // if (node_type == "remote") {
+    //     // homing_finger();
+    //     // ROS_INFO("Remote gripper homed");
+    // }
+    // rdda->ts.remote_stamp = double(this->now().seconds());
 
 }
 
-// A dummy callback to signal completion of slave gripper homing
-bool RDDNode::initSlave(std_srvs::srv::Empty::Request &req, std_srvs::srv::Empty::Response &resp) {
-    return true;
-}
+// // A dummy callback to signal completion of slave gripper homing
+// bool RDDNode::initSlave(std_srvs::srv::Empty::Request &req, std_srvs::srv::Empty::Response &resp) {
+//     return true;
+// }
 
-// Homing slave gripper finger before actuation
-void RDDNode::homing_finger() {
-    rdda_interface::msg::RDDAPacket packet_msg;
+// // Homing slave gripper finger before actuation
+// void RDDNode::homing_finger() {
+//     rdda_interface::msg::RDDAPacket packet_msg;
 
-    double tau_upper_limit = 0.3;
-    double tau_lower_limit = -0.4;
-    double control_step = 0.05;
-    std::vector<double> pos_ref{rdda->motor[0].rddaPacket.pos_out, rdda->motor[1].rddaPacket.pos_out, rdda->motor[2].rddaPacket.pos_out};
-    rclcpp::Rate loop_rate(20);
-    std::vector<bool> opened{false, false};
+//     double tau_upper_limit = 0.3;
+//     double tau_lower_limit = -0.4;
+//     double control_step = 0.05;
+//     std::vector<double> pos_ref{rdda->motor[0].rddaPacket.pos_out, rdda->motor[1].rddaPacket.pos_out, rdda->motor[2].rddaPacket.pos_out};
+//     rclcpp::Rate loop_rate(20);
+//     std::vector<bool> opened{false, false};
 
-    // set homing stiffness to 5.0
-    for (int i = 0; i < MOTOR_COUNT; i ++) {
-        rdda->motor[i].rddaPacket.pos_ref = pos_ref[i];
-    }
+//     // set homing stiffness to 5.0
+//     for (int i = 0; i < MOTOR_COUNT; i ++) {
+//         rdda->motor[i].rddaPacket.pos_ref = pos_ref[i];
+//     }
 
-    // IMPORTANT!! For pos_ref to be updated
-    rclcpp::sleep_for(std::chrono::milliseconds(100));
+//     // IMPORTANT!! For pos_ref to be updated
+//     rclcpp::sleep_for(std::chrono::milliseconds(100));
 
-    for (int i = 0; i < MOTOR_COUNT; i ++) {
-        rdda->motor[i].stiffness = 5.0;
-    }
+//     for (int i = 0; i < MOTOR_COUNT; i ++) {
+//         rdda->motor[i].stiffness = 5.0;
+//     }
 
-    // Open two fingers to lower bound
-    while(rclcpp::ok() && (!opened[0] || !opened[1] || !opened[2])) {
-        for (int i = 0; i < MOTOR_COUNT; i ++) {
-            if (rdda->motor[i].rddaPacket.tau < tau_upper_limit) {
-                // mutex_lock(&rdda->mutex);
-                pos_ref[i] += control_step;
-                rdda->motor[i].rddaPacket.pos_ref = pos_ref[i];
-                std::cout << rdda->motor[0].rddaPacket.tau << " " << rdda->motor[1].rddaPacket.tau << "" 
-                << rdda->motor[2].rddaPacket.tau << std::endl;
-                // mutex_unlock(&rdda->mutex);
-            }
-            else {
-                opened[i] = true;
-            }
-        }
-        loop_rate.sleep();
-    }
+//     // Open two fingers to lower bound
+//     while(rclcpp::ok() && (!opened[0] || !opened[1] || !opened[2])) {
+//         for (int i = 0; i < MOTOR_COUNT; i ++) {
+//             if (rdda->motor[i].rddaPacket.tau < tau_upper_limit) {
+//                 // mutex_lock(&rdda->mutex);
+//                 pos_ref[i] += control_step;
+//                 rdda->motor[i].rddaPacket.pos_ref = pos_ref[i];
+//                 std::cout << rdda->motor[0].rddaPacket.tau << " " << rdda->motor[1].rddaPacket.tau << "" 
+//                 << rdda->motor[2].rddaPacket.tau << std::endl;
+//                 // mutex_unlock(&rdda->mutex);
+//             }
+//             else {
+//                 opened[i] = true;
+//             }
+//         }
+//         loop_rate.sleep();
+//     }
 
-    // ROS_INFO("Fingers opened to the max");
+//     // ROS_INFO("Fingers opened to the max");
 
-    // Reset stiffness to 0
-    for (int i = 0; i < MOTOR_COUNT; i ++) {
-        rdda->motor[i].stiffness = 0.0;
-        rdda->motor[i].rddaPacket.tau_ref = 0.1;
-    }
+//     // Reset stiffness to 0
+//     for (int i = 0; i < MOTOR_COUNT; i ++) {
+//         rdda->motor[i].stiffness = 0.0;
+//         rdda->motor[i].rddaPacket.tau_ref = 0.1;
+//     }
     
-    // Wait for stiffness to be updated
-    rclcpp::sleep_for(std::chrono::milliseconds(100));
+//     // Wait for stiffness to be updated
+//     rclcpp::sleep_for(std::chrono::milliseconds(100));
 
 
-    // Reset motor init position
-    for (int i = 0; i < MOTOR_COUNT; i ++) {
-        rdda->motor[i].init_pos = rdda->motor[i].motorIn.act_pos;
-    }
+//     // Reset motor init position
+//     for (int i = 0; i < MOTOR_COUNT; i ++) {
+//         rdda->motor[i].init_pos = rdda->motor[i].motorIn.act_pos;
+//     }
 
-    // init_srv = node_.advertiseService("/slave_initialized", &RDDNode::initSlave, this);
-}
+//     // init_srv = node_.advertiseService("/slave_initialized", &RDDNode::initSlave, this);
+// }
 
 /* Publish rdda joint msgs at 100Hz */
 void RDDNode::publish_rdda_joint_state() {
     sensor_msgs::msg::JointState states;
-    double series_stiffness = 4.0;
+    // double series_stiffness = 4.0;
     states.effort.resize(joint_names.size());
     states.name.resize(joint_names.size());
     states.position.resize(joint_names.size());
@@ -176,9 +185,12 @@ void RDDNode::publish_rdda_joint_state() {
     mutex_lock(&rdda->mutex);
     for (size_t i = 0; i < joint_names.size(); i ++) {
         states.name[i] = joint_names[i];
-        states.position[i] = rdda->motor[i].rddaPacket.pos_out + rdda->motor[i].motorIn.act_pre / series_stiffness;
-        states.velocity[i] = rdda->motor[i].rddaPacket.vel_out;
-        states.effort[i] = -rdda->motor[i].motorIn.act_pre;
+        // states.position[i] = rdda->motor[i].rddaPacket.pos_out + rdda->motor[i].motorIn.act_pre / series_stiffness;
+        // states.velocity[i] = rdda->motor[i].rddaPacket.vel_out;
+        // states.effort[i] = -rdda->motor[i].motorIn.act_pre;
+        states.position[i] = rdda->motor[i].motorIn.act_pos;
+        states.velocity[i] = rdda->motor[i].motorIn.act_vel;
+        states.effort[i] = -rdda->motor[i].motorIn.act_tau;
     }
     mutex_unlock(&rdda->mutex);
     rdda_joint_state_pub->publish(states);
@@ -204,26 +216,30 @@ void RDDNode::publish_rddapacket() {
     mutex_lock(&rdda->mutex);
 
     for (int i = 0; i < MOTOR_COUNT; i ++) {
-        packet_msg.pos[i] = rdda->motor[i].rddaPacket.pos_out;
-        packet_msg.vel[i] = rdda->motor[i].rddaPacket.vel_out;
-        packet_msg.tau[i] = rdda->motor[i].rddaPacket.tau;
+        packet_msg.pos[i] = rdda->motor[i].motorOut.tg_pos;
+        packet_msg.vel[i] = rdda->motor[i].motorOut.vel_off;
+        packet_msg.tau[i] = rdda->motor[i].motorOut.tau_off;
+
+        // packet_msg.pos[i] = rdda->motor[i].rddaPacket.pos_out;
+        // packet_msg.vel[i] = rdda->motor[i].rddaPacket.vel_out;
+        // packet_msg.tau[i] = rdda->motor[i].rddaPacket.tau;
         // packet_msg.contact_flag[i] = rdda->motor[i].rddaPacket.contact_flag;
-        packet_msg.wave[i] = rdda->motor[i].rddaPacket.wave_out;
+        // packet_msg.wave[i] = rdda->motor[i].rddaPacket.wave_out;
         // packet_msg.wave_aux[i] = rdda->motor[i].rddaPacket.wave_out_aux;
         // packet_msg.test[i] = rdda->motor[i].rddaPacket.test;
-        packet_msg.pressure[i] = rdda->motor[i].motorIn.act_pre;
-        packet_msg.delay_energy_reservior[i] = rdda->motor[i].rddaPacket.delay_energy_reservior;
-        packet_msg.pos_d[i] = rdda->motor[i].rddaPacket.pos_d_out;
-        packet_msg.energy[i] = rdda->motor[i].rddaPacket.energy_tdpa_out;
-        packet_msg.ct[i] = rdda->motor[i].rddaPacket.coupling_torque_out;
+        // packet_msg.pressure[i] = rdda->motor[i].motorIn.act_pre;
+        // packet_msg.delay_energy_reservior[i] = rdda->motor[i].rddaPacket.delay_energy_reservior;
+        // packet_msg.pos_d[i] = rdda->motor[i].rddaPacket.pos_d_out;
+        // packet_msg.energy[i] = rdda->motor[i].rddaPacket.energy_tdpa_out;
+        // packet_msg.ct[i] = rdda->motor[i].rddaPacket.coupling_torque_out;
     }
 
     
-    packet_msg.error_signal = rdda->error_signal.error_out;
+    // packet_msg.error_signal = rdda->error_signal.error_out;
     packet_msg.local_stamp = double(this->now().seconds());
     // packet_msg.local_stamp = double(rclcpp::Time::now().seconds());
-    packet_msg.remote_stamp = rdda->ts.remote_stamp;
-    packet_msg.time_delay = rdda->ts.delay_cycle * 0.25e-3;
+    // packet_msg.remote_stamp = rdda->ts.remote_stamp;
+    // packet_msg.time_delay = rdda->ts.delay_cycle * 0.25e-3;
 
     
     mutex_unlock(&rdda->mutex);
@@ -259,130 +275,130 @@ void RDDNode::publish_rddapacket() {
     // ROS_INFO("Published RDDARead message");
 }
 
-/* Publish rdda packet through ROS */
-void RDDNode::publish_rddapacket_delay() {
+// /* Publish rdda packet through ROS */
+// void RDDNode::publish_rddapacket_delay() {
 
-    rdda_interface::msg::RDDAPacket packet_msg;
-    packet_msg.pos.resize(MOTOR_COUNT);
-    packet_msg.vel.resize(MOTOR_COUNT);
-    packet_msg.pressure.resize(MOTOR_COUNT);
-    packet_msg.wave.resize(MOTOR_COUNT);
-    packet_msg.pos_d.resize(MOTOR_COUNT);
+//     rdda_interface::msg::RDDAPacket packet_msg;
+//     packet_msg.pos.resize(MOTOR_COUNT);
+//     packet_msg.vel.resize(MOTOR_COUNT);
+//     packet_msg.pressure.resize(MOTOR_COUNT);
+//     packet_msg.wave.resize(MOTOR_COUNT);
+//     packet_msg.pos_d.resize(MOTOR_COUNT);
 
-    mutex_lock(&rdda->mutex);
+//     mutex_lock(&rdda->mutex);
 
-    for (int i = 0; i < MOTOR_COUNT; i ++) {
-        pos_d[current_index][i] = rdda->motor[i].rddaPacket.pos_out;
-        vel_d[current_index][i] = rdda->motor[i].rddaPacket.vel_out;
-        pre_d[current_index][i] = rdda->motor[i].motorIn.act_pre;
-        wave_d[current_index][i] = rdda->motor[i].rddaPacket.wave_out;
-        pos_dd[current_index][i] = rdda->motor[i].rddaPacket.pos_d_out;
-    }
+//     for (int i = 0; i < MOTOR_COUNT; i ++) {
+//         pos_d[current_index][i] = rdda->motor[i].rddaPacket.pos_out;
+//         vel_d[current_index][i] = rdda->motor[i].rddaPacket.vel_out;
+//         pre_d[current_index][i] = rdda->motor[i].motorIn.act_pre;
+//         wave_d[current_index][i] = rdda->motor[i].rddaPacket.wave_out;
+//         pos_dd[current_index][i] = rdda->motor[i].rddaPacket.pos_d_out;
+//     }
 
     
-    delay_index = current_index - added_delay;
-    if (delay_index < 0) delay_index += delay_max;
-    current_index++;
-    if (current_index >= delay_max) current_index = 0;
+//     delay_index = current_index - added_delay;
+//     if (delay_index < 0) delay_index += delay_max;
+//     current_index++;
+//     if (current_index >= delay_max) current_index = 0;
 
-    for (int i = 0; i < MOTOR_COUNT; i ++) {
-        packet_msg.pos[i] = pos_d[delay_index][i];
-        packet_msg.vel[i] = vel_d[delay_index][i];
-        packet_msg.pressure[i] = pre_d[delay_index][i];
-        packet_msg.wave[i] = wave_d[delay_index][i];
-        packet_msg.pos_d[i] = pos_dd[delay_index][i];
-    }
+//     for (int i = 0; i < MOTOR_COUNT; i ++) {
+//         packet_msg.pos[i] = pos_d[delay_index][i];
+//         packet_msg.vel[i] = vel_d[delay_index][i];
+//         packet_msg.pressure[i] = pre_d[delay_index][i];
+//         packet_msg.wave[i] = wave_d[delay_index][i];
+//         packet_msg.pos_d[i] = pos_dd[delay_index][i];
+//     }
 
-    packet_msg.error_signal = rdda->error_signal.error_out;
-    packet_msg.local_stamp = double(this->now().seconds());
-    packet_msg.remote_stamp = rdda->ts.remote_stamp;
-    packet_msg.time_delay = rdda->ts.delay_cycle * 0.25e-3;
+//     packet_msg.error_signal = rdda->error_signal.error_out;
+//     packet_msg.local_stamp = double(this->now().seconds());
+//     packet_msg.remote_stamp = rdda->ts.remote_stamp;
+//     packet_msg.time_delay = rdda->ts.delay_cycle * 0.25e-3;
 
-    mutex_unlock(&rdda->mutex);
+//     mutex_unlock(&rdda->mutex);
 
-    rdda_packet_pub->publish(packet_msg);
-}
+//     rdda_packet_pub->publish(packet_msg);
+// }
 
-/* Publish rdda packet through ROS */
-void RDDNode::publish_rddapacket_aux() {
+// /* Publish rdda packet through ROS */
+// void RDDNode::publish_rddapacket_aux() {
 
-    rdda_interface::msg::RDDAPacket packet_msg;
-    packet_msg.pos.resize(MOTOR_COUNT);
-    packet_msg.vel.resize(MOTOR_COUNT);
-    packet_msg.tau.resize(MOTOR_COUNT);
-    packet_msg.wave.resize(MOTOR_COUNT);
-    packet_msg.wave_aux.resize(MOTOR_COUNT);
-    packet_msg.pressure.resize(MOTOR_COUNT);
-    packet_msg.test.resize(MOTOR_COUNT);
-    packet_msg.delay_energy_reservior.resize(MOTOR_COUNT);
+//     rdda_interface::msg::RDDAPacket packet_msg;
+//     packet_msg.pos.resize(MOTOR_COUNT);
+//     packet_msg.vel.resize(MOTOR_COUNT);
+//     packet_msg.tau.resize(MOTOR_COUNT);
+//     packet_msg.wave.resize(MOTOR_COUNT);
+//     packet_msg.wave_aux.resize(MOTOR_COUNT);
+//     packet_msg.pressure.resize(MOTOR_COUNT);
+//     packet_msg.test.resize(MOTOR_COUNT);
+//     packet_msg.delay_energy_reservior.resize(MOTOR_COUNT);
 
-    mutex_lock(&rdda->mutex);
+//     mutex_lock(&rdda->mutex);
 
-    for (int i = 0; i < MOTOR_COUNT; i ++) {
-        packet_msg.pos[i] = rdda->motor[i].rddaPacket.pos_out;
-        packet_msg.vel[i] = rdda->motor[i].rddaPacket.vel_out;
-        packet_msg.tau[i] = rdda->motor[i].rddaPacket.tau;
-        packet_msg.wave[i] = rdda->motor[i].rddaPacket.wave_out;
-        packet_msg.wave_aux[i] = rdda->motor[i].rddaPacket.wave_out_aux;
-        packet_msg.test[i] = rdda->motor[i].rddaPacket.test;
-        packet_msg.pressure[i] = rdda->motor[i].motorIn.act_pre;
-        packet_msg.delay_energy_reservior[i] = rdda->motor[i].rddaPacket.delay_energy_reservior;
-    }
-    packet_msg.time_delay = rdda->ts.delay_cycle * 0.25e-3;
+//     for (int i = 0; i < MOTOR_COUNT; i ++) {
+//         packet_msg.pos[i] = rdda->motor[i].rddaPacket.pos_out;
+//         packet_msg.vel[i] = rdda->motor[i].rddaPacket.vel_out;
+//         packet_msg.tau[i] = rdda->motor[i].rddaPacket.tau;
+//         packet_msg.wave[i] = rdda->motor[i].rddaPacket.wave_out;
+//         packet_msg.wave_aux[i] = rdda->motor[i].rddaPacket.wave_out_aux;
+//         packet_msg.test[i] = rdda->motor[i].rddaPacket.test;
+//         packet_msg.pressure[i] = rdda->motor[i].motorIn.act_pre;
+//         packet_msg.delay_energy_reservior[i] = rdda->motor[i].rddaPacket.delay_energy_reservior;
+//     }
+//     packet_msg.time_delay = rdda->ts.delay_cycle * 0.25e-3;
 
-    mutex_unlock(&rdda->mutex);
+//     mutex_unlock(&rdda->mutex);
 
-    rdda_packet_aux_pub->publish(packet_msg);
-}
+//     rdda_packet_aux_pub->publish(packet_msg);
+// }
 
-/* Subscriber callback */
-/* Comment out callback for remote test */
-void RDDNode::rddapacket_callback(const rdda_interface::msg::RDDAPacket::SharedPtr packet_msg) {
+// /* Subscriber callback */
+// /* Comment out callback for remote test */
+// void RDDNode::rddapacket_callback(const rdda_interface::msg::RDDAPacket::SharedPtr packet_msg) {
 
-    mutex_lock(&rdda->mutex);
-    for (int i = 0; i < MOTOR_COUNT; i ++) {
-        // Use this for data collection
-        // rdda->motor[i].rddaPacket.pos_in = packet_msg->pos[i];
-        // rdda->motor[i].rddaPacket.wave_in = packet_msg->wave[i];
+//     mutex_lock(&rdda->mutex);
+//     for (int i = 0; i < MOTOR_COUNT; i ++) {
+//         // Use this for data collection
+//         // rdda->motor[i].rddaPacket.pos_in = packet_msg->pos[i];
+//         // rdda->motor[i].rddaPacket.wave_in = packet_msg->wave[i];
 
-        rdda->motor[i].rddaPacket.pos_ref = -1.0 * packet_msg->pos[i]; // use this for policy rollout, add negative sign to synchronize the direction
+//         rdda->motor[i].rddaPacket.pos_ref = -1.0 * packet_msg->pos[i]; // use this for policy rollout, add negative sign to synchronize the direction
 
-        // rdda->motor[i].rddaPacket.vel_in = packet_msg->vel[i];
-        // rdda->motor[i].rddaPacket.wave_in_aux = packet_msg->wave_aux[i];
-        // rdda->motor[i].rddaPacket.pos_d_in = packet_msg->pos_d[i];
-        // rdda->motor[i].rddaPacket.pre_in = packet_msg->pressure[i];
-        // rdda->motor[i].rddaPacket.energy_tdpa_in = packet_msg->energy[i];
-        // rdda->motor[i].rddaPacket.coupling_torque_in = packet_msg->ct[i];
-    }
-    rdda->error_signal.error_in = packet_msg->error_signal;
-    rdda->ts.remote_stamp = packet_msg->local_stamp;
-    double last_local_stamp = packet_msg->remote_stamp;
-    rclcpp::Time local_stamp = this->now();
-    rdda->ts.delay_cycle = int((local_stamp.seconds() - last_local_stamp) / 0.25e-3 / 2);
+//         // rdda->motor[i].rddaPacket.vel_in = packet_msg->vel[i];
+//         // rdda->motor[i].rddaPacket.wave_in_aux = packet_msg->wave_aux[i];
+//         // rdda->motor[i].rddaPacket.pos_d_in = packet_msg->pos_d[i];
+//         // rdda->motor[i].rddaPacket.pre_in = packet_msg->pressure[i];
+//         // rdda->motor[i].rddaPacket.energy_tdpa_in = packet_msg->energy[i];
+//         // rdda->motor[i].rddaPacket.coupling_torque_in = packet_msg->ct[i];
+//     }
+//     rdda->error_signal.error_in = packet_msg->error_signal;
+//     rdda->ts.remote_stamp = packet_msg->local_stamp;
+//     double last_local_stamp = packet_msg->remote_stamp;
+//     rclcpp::Time local_stamp = this->now();
+//     rdda->ts.delay_cycle = int((local_stamp.seconds() - last_local_stamp) / 0.25e-3 / 2);
 
-    if (!teleop_connection_index) {
-        for (int i = 0; i < MOTOR_COUNT; i ++) {
-            rdda->motor[i].rddaPacket.tau_ref = 0.0;
-        }
-    }
-    mutex_unlock(&rdda->mutex);
+//     if (!teleop_connection_index) {
+//         for (int i = 0; i < MOTOR_COUNT; i ++) {
+//             rdda->motor[i].rddaPacket.tau_ref = 0.0;
+//         }
+//     }
+//     mutex_unlock(&rdda->mutex);
 
-    teleop_connection_index = true;
-    // ROS_INFO_THROTTLE(1, "Write into rdda memory, message delay: %lf", (local_stamp.seconds() - last_local_stamp) / 2);
+//     teleop_connection_index = true;
+//     // ROS_INFO_THROTTLE(1, "Write into rdda memory, message delay: %lf", (local_stamp.seconds() - last_local_stamp) / 2);
 
-}
+// }
 
-void RDDNode::subJointCommands_callback(const trajectory_msgs::msg::JointTrajectoryPoint::SharedPtr JointCommands_msg) {
+// void RDDNode::subJointCommands_callback(const trajectory_msgs::msg::JointTrajectoryPoint::SharedPtr JointCommands_msg) {
 
-    mutex_lock(&rdda->mutex);
+//     mutex_lock(&rdda->mutex);
 
-    for (int i = 0; i < MOTOR_COUNT; i ++) {
-        rdda->motor[i].rddaPacket.pos_ref = JointCommands_msg->positions[i];
-    }
+//     for (int i = 0; i < MOTOR_COUNT; i ++) {
+//         rdda->motor[i].rddaPacket.pos_ref = JointCommands_msg->positions[i];
+//     }
 
-    // ROS_INFO("Set position reference: [%lf, %lf, %lf]", JointCommands_msg->positions[0], JointCommands_msg->positions[1], JointCommands_msg->positions[2]);
-    mutex_unlock(&rdda->mutex);
-}
+//     // ROS_INFO("Set position reference: [%lf, %lf, %lf]", JointCommands_msg->positions[0], JointCommands_msg->positions[1], JointCommands_msg->positions[2]);
+//     mutex_unlock(&rdda->mutex);
+// }
 
 // /* Service functions */
 // bool RDDNode::setMaxVel(rdda_interface::SetMaxVelocity::Request &req, rdda_interface::SetMaxVelocity::Response &res) {
@@ -465,8 +481,8 @@ int main(int argc, char** argv) {
 
     /* Map data structs to shared memory */
     /* Open and obtain shared memory pointers for master-input data */
-    char *name = &argv[1][0];
-    rdda = initRdda(name);
+    // char *name = &argv[1][0];
+    rdda = initRdda();
     if (rdda == nullptr) {
         fprintf(stderr, "Init rdda failed.\n");
         printf("shm_open error, errno(%d): %s\n", errno, strerror(errno));
